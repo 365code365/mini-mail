@@ -35,26 +35,35 @@ type MailHandler struct {
 func (h *MailHandler) HandleMail(msg *smtp.MailMessage) error {
 	log.Printf("Received mail from %s to %v with subject: %s", msg.From, msg.To, msg.Subject)
 
-	// 根据收件人邮箱找到对应的用户ID
+	// 根据收件人邮箱地址找到创建者
 	var userID int64 = 0
 	if len(msg.To) > 0 {
-		// 查找邮箱域名记录，获取用户ID
-		domain, err := h.storage.GetMailDomainByEmail(msg.To[0])
+		// 直接查找这个邮箱是谁创建的
+		recipientEmail := msg.To[0]
+		domain, err := h.storage.GetMailDomainByEmail(recipientEmail)
 		if err != nil {
-			log.Printf("Warning: Failed to find mail domain for %s: %v", msg.To[0], err)
+			log.Printf("Warning: Failed to find mail domain for %s: %v", recipientEmail, err)
 		} else if domain != nil {
-			// 从域名记录中获取email，然后查找用户
-			user, err := h.storage.GetUserByEmail(domain.Email)
-			if err != nil {
-				log.Printf("Warning: Failed to find user for email %s: %v", domain.Email, err)
-			} else if user != nil {
-				userID = user.ID
-			}
+			// 直接从域名记录中获取 user_id
+			userID = domain.UserID
+			log.Printf("[Mail] 邮件归属用户ID: %d (邮箱: %s)", userID, recipientEmail)
+		} else {
+			log.Printf("Warning: 邮箱 %s 未在系统中创建", recipientEmail)
 		}
 	}
 
-	// 如果找不到用户，使用默认userID=0（可以后续扩展为公共邮箱）
-	return h.storage.SaveMail(userID, msg.From, msg.To, msg.Subject, msg.Body, msg.RawData)
+	// 如果找不到用户，使用默认userID=0（公共邮件）
+	if userID == 0 {
+		log.Printf("Warning: 邮件保存为公共邮件 (userID=0)，需要先在系统中创建该邮箱")
+	}
+
+	err := h.storage.SaveMail(userID, msg.From, msg.To, msg.Subject, msg.Body, msg.RawData)
+	if err != nil {
+		log.Printf("Error: 保存邮件失败: %v", err)
+		return err
+	}
+	log.Printf("✓ 邮件已保存 (userID: %d, from: %s, to: %v)", userID, msg.From, msg.To)
+	return nil
 }
 
 func main() {
@@ -67,11 +76,11 @@ func main() {
 		PublicIP:         "124.156.188.238",                      // 公网IP
 		TencentSecretID:  "AKIDWAcqxOjsoX3MRK2XobHpFXezBJOF98xZ", // 腾讯云SecretID
 		TencentSecretKey: "VmqgHjy0pSzKRK1VmpePyJSP9g060nMi",     // 腾讯云SecretKey
-		// 邮件发送配置
-		EmailSMTPHost: "mail.niuma946.com",  // SMTP服务器地址
+		// 邮件发送配置（使用自己的SMTP服务器）
+		EmailSMTPHost: "127.0.0.1",          // 本地SMTP服务器
 		EmailSMTPPort: 25,                   // SMTP端口
 		EmailSender:   "admin@niuma946.com", // 发件人邮箱
-		EmailPassword: "",                   // 邮箱密码（如需要）
+		EmailPassword: "",                   // 无需密码（本地服务器）
 	}
 
 	// 初始化存储

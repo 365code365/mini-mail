@@ -12,7 +12,7 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', sans-serif;
             background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
             min-height: 100vh;
             display: flex;
@@ -44,6 +44,16 @@
             font-size: 14px;
         }
 
+        .info-message {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #1976d2;
+        }
+
         .form-group {
             margin-bottom: 20px;
         }
@@ -53,12 +63,12 @@
             margin-bottom: 8px;
             color: #333;
             font-weight: 500;
-            font-size: 14px;
         }
 
-        input {
+        input[type="email"],
+        input[type="password"] {
             width: 100%;
-            padding: 12px 15px;
+            padding: 12px;
             border: 1px solid #ddd;
             border-radius: 6px;
             font-size: 14px;
@@ -70,37 +80,7 @@
             border-color: #667eea;
         }
 
-        .code-input-group {
-            display: flex;
-            gap: 10px;
-        }
-
-        .code-input-group input {
-            flex: 1;
-        }
-
-        .send-code-btn {
-            padding: 12px 20px;
-            background: #667eea;
-            color: white;
-            border: none;
-            border-radius: 6px;
-            cursor: pointer;
-            font-size: 14px;
-            white-space: nowrap;
-            transition: background 0.3s;
-        }
-
-        .send-code-btn:hover:not(:disabled) {
-            background: #5568d3;
-        }
-
-        .send-code-btn:disabled {
-            background: #ccc;
-            cursor: not-allowed;
-        }
-
-        button[type="submit"] {
+        .btn {
             width: 100%;
             padding: 12px;
             background: #667eea;
@@ -111,326 +91,93 @@
             font-weight: 500;
             cursor: pointer;
             transition: background 0.3s;
-            margin-top: 10px;
         }
 
-        button[type="submit"]:hover {
+        .btn:hover {
             background: #5568d3;
         }
 
         .error-message {
             color: #e74c3c;
             font-size: 14px;
-            margin-top: 5px;
+            margin-top: 10px;
             display: none;
         }
 
         .success-message {
             color: #27ae60;
             font-size: 14px;
-            margin-top: 5px;
+            margin-top: 10px;
             display: none;
         }
 
-        .info-message {
-            background: #e3f2fd;
-            border-left: 4px solid #2196f3;
-            padding: 12px;
-            margin-bottom: 20px;
-            border-radius: 4px;
-            font-size: 14px;
-            color: #1976d2;
-        }
-
-        .switch-mode {
-            text-align: center;
+        .admin-note {
             margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid #e0e0e0;
-        }
-
-        .switch-mode a {
-            color: #667eea;
-            text-decoration: none;
-            font-size: 14px;
-            cursor: pointer;
-        }
-
-        .switch-mode a:hover {
-            text-decoration: underline;
-        }
-
-        .hidden {
-            display: none;
-        }
-
-        /* 设置密码模态框 */
-        .modal {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            z-index: 1000;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: white;
-            border-radius: 12px;
-            padding: 30px;
-            max-width: 400px;
-            width: 90%;
-        }
-
-        .modal-header {
-            margin-bottom: 20px;
-        }
-
-        .modal-header h2 {
-            margin: 0;
-            color: #333;
-            font-size: 20px;
-        }
-
-        .modal-header p {
-            margin: 8px 0 0 0;
-            color: #666;
-            font-size: 14px;
+            padding: 12px;
+            background: #fff3cd;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #856404;
         }
     </style>
 </head>
 <body>
     <div class="login-container">
-        <h1>📧 邮箱服务登录</h1>
-        <p class="subtitle" id="subtitle">使用邮箱验证码登录或注册</p>
+        <h1>📧 邮箱服务</h1>
+        <p class="subtitle">注册或登录您的账户</p>
 
-        <div class="info-message" id="infoMessage">
-            首次登录将自动创建账号，登录后需设置初始密码
+        <div class="info-message">
+            输入邮箱和密码即可注册或登录（密码需大于6位）
         </div>
 
-        <!-- 验证码登录表单 -->
-        <form id="codeLoginForm">
+        <form id="loginForm">
             <div class="form-group">
                 <label for="email">邮箱地址</label>
-                <input type="email" id="email" name="email" placeholder="请输入您的邮箱" required>
-                <div class="error-message" id="emailError"></div>
+                <input type="email" id="email" name="email" placeholder="请输入邮箱" required>
             </div>
 
             <div class="form-group">
-                <label for="code">验证码</label>
-                <div class="code-input-group">
-                    <input type="text" id="code" name="code" placeholder="请输入验证码" maxlength="6" required>
-                    <button type="button" class="send-code-btn" id="sendCodeBtn">发送验证码</button>
-                </div>
-                <div class="success-message" id="codeSuccess"></div>
-                <div class="error-message" id="codeError"></div>
-            </div>
-
-            <button type="submit">登录 / 注册</button>
-            <div class="error-message" id="codeLoginError" style="margin-top: 10px;"></div>
-            
-            <div class="switch-mode">
-                <a onclick="switchToPasswordMode()">使用密码登录</a>
-            </div>
-        </form>
-
-        <!-- 密码登录表单 -->
-        <form id="passwordLoginForm" class="hidden">
-            <div class="form-group">
-                <label for="passwordEmail">邮箱地址</label>
-                <input type="email" id="passwordEmail" name="email" placeholder="请输入您的邮箱" required>
-                <div class="error-message" id="passwordEmailError"></div>
-            </div>
-
-            <div class="form-group">
-                <label for="password">密码</label>
+                <label for="password">密码（大于6位）</label>
                 <input type="password" id="password" name="password" placeholder="请输入密码" required>
-                <div class="error-message" id="passwordError2"></div>
             </div>
 
-            <button type="submit">登录</button>
-            <div class="error-message" id="passwordLoginError" style="margin-top: 10px;"></div>
+            <button type="submit" class="btn">登录 / 注册</button>
             
-            <div class="switch-mode">
-                <a onclick="switchToCodeMode()">使用验证码登录</a>
-            </div>
+            <div class="error-message" id="errorMessage"></div>
+            <div class="success-message" id="successMessage"></div>
         </form>
-    </div>
 
-    <!-- 设置密码模态框 -->
-    <div class="modal" id="setPasswordModal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>设置初始密码</h2>
-                <p>首次登录需要设置密码，用于后续快速登录</p>
-            </div>
-            <form id="setPasswordForm">
-                <div class="form-group">
-                    <label for="newPassword">密码（至少6位）</label>
-                    <input type="password" id="newPassword" placeholder="请输入密码" minlength="6" required>
-                </div>
-                <div class="form-group">
-                    <label for="confirmPassword">确认密码</label>
-                    <input type="password" id="confirmPassword" placeholder="请再次输入密码" minlength="6" required>
-                    <div class="error-message" id="passwordError"></div>
-                </div>
-                <button type="submit">确认设置</button>
-            </form>
+        <div class="admin-note">
+            💡 管理员账号: admin@admin.com / a1039385286.
         </div>
     </div>
 
     <script>
         const API_BASE = window.location.origin;
-        let countdown = 0;
-        let countdownTimer = null;
-        let userEmail = '';
-        let loginMode = 'code'; // 'code' 或 'password'
 
-        // 切换到密码登录
-        function switchToPasswordMode() {
-            loginMode = 'password';
-            document.getElementById('codeLoginForm').classList.add('hidden');
-            document.getElementById('passwordLoginForm').classList.remove('hidden');
-            document.getElementById('subtitle').textContent = '使用邮箱和密码登录';
-            document.getElementById('infoMessage').style.display = 'none';
+        function showError(message) {
+            const errorEl = document.getElementById('errorMessage');
+            errorEl.textContent = message;
+            errorEl.style.display = 'block';
+            document.getElementById('successMessage').style.display = 'none';
         }
 
-        // 切换到验证码登录
-        function switchToCodeMode() {
-            loginMode = 'code';
-            document.getElementById('passwordLoginForm').classList.add('hidden');
-            document.getElementById('codeLoginForm').classList.remove('hidden');
-            document.getElementById('subtitle').textContent = '使用邮箱验证码登录或注册';
-            document.getElementById('infoMessage').style.display = 'block';
+        function showSuccess(message) {
+            const successEl = document.getElementById('successMessage');
+            successEl.textContent = message;
+            successEl.style.display = 'block';
+            document.getElementById('errorMessage').style.display = 'none';
         }
 
-        // 发送验证码
-        document.getElementById('sendCodeBtn').addEventListener('click', async function() {
-            const emailInput = document.getElementById('email');
-            const email = emailInput.value.trim();
-            const btn = this;
-
-            if (!email) {
-                showError('emailError', '请输入邮箱地址');
-                return;
-            }
-
-            if (!isValidEmail(email)) {
-                showError('emailError', '请输入有效的邮箱地址');
-                return;
-            }
-
-            hideError('emailError');
-            btn.disabled = true;
-
-            try {
-                const response = await fetch(`${API_BASE}/api/auth/send-code`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    showSuccess('codeSuccess', '验证码已发送到您的邮箱！');
-                    startCountdown();
-                } else {
-                    showError('codeError', data.error || '发送失败');
-                    btn.disabled = false;
-                }
-            } catch (error) {
-                showError('codeError', '网络错误，请重试');
-                btn.disabled = false;
-            }
-        });
-
-        // 倒计时
-        function startCountdown() {
-            countdown = 60;
-            const btn = document.getElementById('sendCodeBtn');
-            
-            countdownTimer = setInterval(() => {
-                countdown--;
-                btn.textContent = `${countdown}秒后重发`;
-                
-                if (countdown <= 0) {
-                    clearInterval(countdownTimer);
-                    btn.textContent = '发送验证码';
-                    btn.disabled = false;
-                }
-            }, 1000);
+        function hideMessages() {
+            document.getElementById('errorMessage').style.display = 'none';
+            document.getElementById('successMessage').style.display = 'none';
         }
 
-        // 验证码登录表单提交
-        document.getElementById('codeLoginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const email = document.getElementById('email').value.trim();
-            const code = document.getElementById('code').value.trim();
-
-            if (!email || !code) {
-                showError('codeLoginError', '请填写完整信息');
-                return;
-            }
-
-            hideError('codeLoginError');
-
+        // 尝试登录
+        async function attemptLogin(email, password) {
             try {
-                const response = await fetch(`${API_BASE}/api/auth/verify-code`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ email, code })
-                });
-
-                const data = await response.json();
-
-                if (response.ok) {
-                    // 保存token
-                    localStorage.setItem('token', data.token);
-                    localStorage.setItem('tokenExpiry', data.expires_at);
-                    localStorage.setItem('userEmail', email);
-
-                    // 如果需要设置密码，显示模态框
-                    if (data.need_set_password) {
-                        userEmail = email;
-                        document.getElementById('setPasswordModal').classList.add('active');
-                    } else {
-                        // 直接跳转
-                        window.location.href = '/';
-                    }
-                } else {
-                    showError('codeLoginError', data.error || '登录失败');
-                }
-            } catch (error) {
-                showError('codeLoginError', '网络错误，请重试');
-            }
-        });
-
-        // 密码登录表单提交
-        document.getElementById('passwordLoginForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const email = document.getElementById('passwordEmail').value.trim();
-            const password = document.getElementById('password').value;
-
-            if (!email || !password) {
-                showError('passwordLoginError', '请填写完整信息');
-                return;
-            }
-
-            hideError('passwordLoginError');
-
-            try {
-                const response = await fetch(`${API_BASE}/api/auth/password-login`, {
+                const response = await fetch(`${API_BASE}/api/auth/login`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ email, password })
@@ -439,91 +186,91 @@
                 const data = await response.json();
 
                 if (response.ok) {
-                    // 保存token
+                    // 登录成功
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('tokenExpiry', data.expires_at);
-                    localStorage.setItem('userEmail', email);
-                    
-                    // 跳转到主页
-                    window.location.href = '/';
-                } else {
-                    showError('passwordLoginError', data.error || '登录失败');
+                    showSuccess('登录成功！正在跳转...');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 500);
+                    return true;
                 }
+                return false;
             } catch (error) {
-                showError('passwordLoginError', '网络错误，请重试');
+                console.error('Login error:', error);
+                return false;
             }
-        });
+        }
 
-        // 设置密码表单提交
-        document.getElementById('setPasswordForm').addEventListener('submit', async function(e) {
-            e.preventDefault();
-
-            const password = document.getElementById('newPassword').value;
-            const confirmPassword = document.getElementById('confirmPassword').value;
-
-            if (password !== confirmPassword) {
-                showError('passwordError', '两次输入的密码不一致');
-                return;
-            }
-
-            if (password.length < 6) {
-                showError('passwordError', '密码长度至少6位');
-                return;
-            }
-
-            hideError('passwordError');
-
+        // 尝试注册
+        async function attemptRegister(email, password) {
             try {
-                const response = await fetch(`${API_BASE}/api/auth/set-password`, {
+                const response = await fetch(`${API_BASE}/api/auth/register`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ 
-                        email: userEmail, 
-                        password 
-                    })
+                    body: JSON.stringify({ email, password })
                 });
 
                 const data = await response.json();
 
                 if (response.ok) {
-                    alert('密码设置成功！');
-                    window.location.href = '/';
+                    // 注册成功自动登录
+                    localStorage.setItem('token', data.token);
+                    localStorage.setItem('tokenExpiry', data.expires_at);
+                    showSuccess('注册成功！正在跳转...');
+                    setTimeout(() => {
+                        window.location.href = '/';
+                    }, 500);
+                    return { success: true };
                 } else {
-                    showError('passwordError', data.error || '设置失败');
+                    return { success: false, error: data.error || '注册失败' };
                 }
             } catch (error) {
-                showError('passwordError', '网络错误，请重试');
+                console.error('Register error:', error);
+                return { success: false, error: '网络错误' };
+            }
+        }
+
+        // 表单提交
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            hideMessages();
+
+            const email = document.getElementById('email').value.trim();
+            const password = document.getElementById('password').value;
+
+            if (!email || !password) {
+                showError('请填写完整信息');
+                return;
+            }
+
+            if (password.length < 6) {
+                showError('密码必须大于6位');
+                return;
+            }
+
+            // 先尝试登录
+            const loginSuccess = await attemptLogin(email, password);
+            
+            // 如果登录失败，尝试注册
+            if (!loginSuccess) {
+                const registerResult = await attemptRegister(email, password);
+                if (!registerResult.success) {
+                    showError(registerResult.error);
+                }
             }
         });
 
-        // 工具函数
-        function isValidEmail(email) {
-            return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-        }
-
-        function showError(id, message) {
-            const el = document.getElementById(id);
-            el.textContent = message;
-            el.style.display = 'block';
-        }
-
-        function hideError(id) {
-            document.getElementById(id).style.display = 'none';
-        }
-
-        function showSuccess(id, message) {
-            const el = document.getElementById(id);
-            el.textContent = message;
-            el.style.display = 'block';
-        }
-
-        // 如果已登录，直接跳转
-        if (localStorage.getItem('token')) {
+        // 检查是否已登录
+        window.onload = function() {
+            const token = localStorage.getItem('token');
             const expiry = localStorage.getItem('tokenExpiry');
-            if (expiry && Date.now() < expiry * 1000) {
+            
+            if (token && expiry && Date.now() < expiry * 1000) {
+                // 已登录，直接跳转
                 window.location.href = '/';
             }
-        }
+        };
     </script>
 </body>
 </html>

@@ -2,7 +2,6 @@ package services
 
 import (
 	"bytes"
-	"crypto/tls"
 	"fmt"
 	"html/template"
 	"net/smtp"
@@ -53,62 +52,30 @@ func (e *EmailSender) sendHTML(to, subject, htmlBody string) error {
 	}
 	message += "\r\n" + htmlBody
 
-	// SMTP认证
-	auth := smtp.PlainAuth("", e.senderEmail, e.password, e.smtpHost)
-
-	// 发送邮件
+	// 直接使用明文SMTP发送（不使用TLS）
 	addr := fmt.Sprintf("%s:%d", e.smtpHost, e.smtpPort)
+	fmt.Printf("[EmailSender] 正在发送邮件到 %s，使用SMTP服务器: %s\n", to, addr)
 
-	// 使用TLS连接
-	tlsConfig := &tls.Config{
-		InsecureSkipVerify: true,
-		ServerName:         e.smtpHost,
+	// 如果没有密码，直接发送无需认证
+	if e.password == "" {
+		err := smtp.SendMail(addr, nil, e.senderEmail, []string{to}, []byte(message))
+		if err != nil {
+			fmt.Printf("[EmailSender] 发送失败: %v\n", err)
+		} else {
+			fmt.Printf("[EmailSender] 发送成功！\n")
+		}
+		return err
 	}
 
-	conn, err := tls.Dial("tcp", addr, tlsConfig)
+	// 如果有密码，使用认证
+	auth := smtp.PlainAuth("", e.senderEmail, e.password, e.smtpHost)
+	err := smtp.SendMail(addr, auth, e.senderEmail, []string{to}, []byte(message))
 	if err != nil {
-		return fmt.Errorf("TLS连接失败: %v", err)
+		fmt.Printf("[EmailSender] 发送失败: %v\n", err)
+	} else {
+		fmt.Printf("[EmailSender] 发送成功！\n")
 	}
-	defer conn.Close()
-
-	client, err := smtp.NewClient(conn, e.smtpHost)
-	if err != nil {
-		return fmt.Errorf("创建SMTP客户端失败: %v", err)
-	}
-	defer client.Close()
-
-	// 认证
-	if err = client.Auth(auth); err != nil {
-		return fmt.Errorf("SMTP认证失败: %v", err)
-	}
-
-	// 设置发件人
-	if err = client.Mail(e.senderEmail); err != nil {
-		return fmt.Errorf("设置发件人失败: %v", err)
-	}
-
-	// 设置收件人
-	if err = client.Rcpt(to); err != nil {
-		return fmt.Errorf("设置收件人失败: %v", err)
-	}
-
-	// 发送邮件内容
-	w, err := client.Data()
-	if err != nil {
-		return fmt.Errorf("开始发送数据失败: %v", err)
-	}
-
-	_, err = w.Write([]byte(message))
-	if err != nil {
-		return fmt.Errorf("写入邮件内容失败: %v", err)
-	}
-
-	err = w.Close()
-	if err != nil {
-		return fmt.Errorf("关闭数据写入失败: %v", err)
-	}
-
-	return client.Quit()
+	return err
 }
 
 // generateVerifyCodeHTML 生成验证码邮件HTML模板

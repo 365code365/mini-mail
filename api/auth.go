@@ -31,6 +31,11 @@ type SetPasswordRequest struct {
 	Password string `json:"password"`
 }
 
+type RegisterRequest struct {
+	Email    string `json:"email"`
+	Password string `json:"password"`
+}
+
 type PasswordLoginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
@@ -46,6 +51,20 @@ type LoginResponse struct {
 func hashPassword(password string) string {
 	hash := sha256.Sum256([]byte(password))
 	return hex.EncodeToString(hash[:])
+}
+
+// getClientIP 获取客户端IP地址
+func getClientIP(r *http.Request) string {
+	// 检查X-Forwarded-For
+	if ip := r.Header.Get("X-Forwarded-For"); ip != "" {
+		return strings.Split(ip, ",")[0]
+	}
+	// 检查X-Real-IP
+	if ip := r.Header.Get("X-Real-IP"); ip != "" {
+		return ip
+	}
+	// 使用RemoteAddr
+	return strings.Split(r.RemoteAddr, ":")[0]
 }
 
 // generateToken 生成JWT token
@@ -78,12 +97,99 @@ func validateToken(tokenString string) (string, int64, error) {
 	}
 
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		email := claims["email"].(string)
-		userID := int64(claims["userID"].(float64))
+		email, emailOk := claims["email"].(string)
+		if !emailOk {
+			return "", 0, jwt.ErrInvalidKey
+		}
+
+		// 安全地转换userID
+		var userID int64
+		if userIDFloat, ok := claims["userID"].(float64); ok {
+			userID = int64(userIDFloat)
+		} else {
+			return "", 0, jwt.ErrInvalidKey
+		}
+
 		return email, userID, nil
 	}
 
 	return "", 0, jwt.ErrSignatureInvalid
+}
+
+// register 注册新用户
+func (s *Server) register(w http.ResponseWriter, r *http.Request) {
+	var req RegisterRequest
+	if err := parseJSON(r, &req); err != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "无效的请求"})
+		return
+	}
+
+	// 验证邮箱和密码
+	if req.Email == "" || req.Password == "" {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "邮箱和密码不能为空"})
+		return
+	}
+
+	if len(req.Password) < 6 {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "密码必须大于6位"})
+		return
+	}
+
+	// 检查邮箱是否已存在
+	existing, err := s.storage.GetUserByEmail(req.Email)
+	if err != nil {
+		log.Printf("Failed to check user: %v", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "注册失败"})
+		return
+	}
+
+	if existing != nil {
+		respondJSON(w, http.StatusBadRequest, map[string]string{"error": "邮箱已被注册"})
+		return
+	}
+
+	// 获取客户端IP
+	clientIP := getClientIP(r)
+
+	// 检查IP是否超过限制（非管理员）
+	if req.Email != "admin@admin.com" {
+		ipCount, err := s.storage.GetUserCountByIP(clientIP)
+		if err != nil {
+			log.Printf("Failed to check IP count: %v", err)
+			respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "注册失败"})
+			return
+		}
+
+		if ipCount >= 5 {
+			respondJSON(w, http.StatusForbidden, map[string]string{"error": "该IP已达到最大注册数量限制（5个账户）"})
+			return
+		}
+	}
+
+	// 创建用户
+	hashedPassword := hashPassword(req.Password)
+	user, err := s.storage.CreateUser(req.Email, hashedPassword, clientIP)
+	if err != nil {
+		log.Printf("Failed to create user: %v", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "注册失败"})
+		return
+	}
+
+	log.Printf("用户注册成功: %s (IP: %s)", user.Email, clientIP)
+
+	// 生成token并登录
+	token, expiresAt, err := generateToken(user.Email, user.ID)
+	if err != nil {
+		log.Printf("Failed to generate token: %v", err)
+		respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "登录失败"})
+		return
+	}
+
+	respondJSON(w, http.StatusOK, LoginResponse{
+		Token:       token,
+		ExpiresAt:   expiresAt,
+		NeedSetPass: false,
+	})
 }
 
 // sendCode 发送验证码
@@ -162,8 +268,9 @@ func (s *Server) verifyCode(w http.ResponseWriter, r *http.Request) {
 
 	needSetPass := false
 	if user == nil {
-		// 首次登录，创建用户
-		user, err = s.storage.CreateUser(req.Email, "")
+		// 首次登录，创建用户（使用客户端IP）
+		clientIP := getClientIP(r)
+		user, err = s.storage.CreateUser(req.Email, "", clientIP)
 		if err != nil {
 			log.Printf("Failed to create user: %v", err)
 			respondJSON(w, http.StatusInternalServerError, map[string]string{"error": "创建用户失败"})

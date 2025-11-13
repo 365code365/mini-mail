@@ -10,10 +10,13 @@ import (
 
 // User 用户模型
 type User struct {
-	ID        int64     `json:"id"`
-	Email     string    `json:"email"`
-	Password  string    `json:"-"` // 不返回给前端
-	CreatedAt time.Time `json:"created_at"`
+	ID          int64     `json:"id"`
+	Email       string    `json:"email"`
+	Password    string    `json:"-"` // 不返回给前端
+	RegisterIP  string    `json:"register_ip"`
+	IsAdmin     bool      `json:"is_admin"`
+	DomainCount int       `json:"domain_count"` // 已创建的邮箱域名数量
+	CreatedAt   time.Time `json:"created_at"`
 }
 
 // VerifyCode 验证码模型
@@ -27,27 +30,33 @@ type VerifyCode struct {
 }
 
 // CreateUser 创建用户
-func (s *SQLiteStorage) CreateUser(email, password string) (*User, error) {
-	query := `INSERT INTO users (email, password, created_at) VALUES (?, ?, ?)`
-	result, err := s.db.Exec(query, email, password, time.Now())
+func (s *SQLiteStorage) CreateUser(email, password, registerIP string) (*User, error) {
+	// 检查是否是管理员
+	isAdmin := email == "admin@admin.com"
+
+	query := `INSERT INTO users (email, password, register_ip, is_admin, domain_count, created_at) VALUES (?, ?, ?, ?, 0, ?)`
+	result, err := s.db.Exec(query, email, password, registerIP, isAdmin, time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("failed to create user: %v", err)
 	}
 
 	id, _ := result.LastInsertId()
 	return &User{
-		ID:        id,
-		Email:     email,
-		CreatedAt: time.Now(),
+		ID:          id,
+		Email:       email,
+		RegisterIP:  registerIP,
+		IsAdmin:     isAdmin,
+		DomainCount: 0,
+		CreatedAt:   time.Now(),
 	}, nil
 }
 
 // GetUserByEmail 根据邮箱获取用户
 func (s *SQLiteStorage) GetUserByEmail(email string) (*User, error) {
-	query := `SELECT id, email, password, created_at FROM users WHERE email = ?`
+	query := `SELECT id, email, password, register_ip, is_admin, domain_count, created_at FROM users WHERE email = ?`
 
 	var user User
-	err := s.db.QueryRow(query, email).Scan(&user.ID, &user.Email, &user.Password, &user.CreatedAt)
+	err := s.db.QueryRow(query, email).Scan(&user.ID, &user.Email, &user.Password, &user.RegisterIP, &user.IsAdmin, &user.DomainCount, &user.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -62,6 +71,28 @@ func (s *SQLiteStorage) GetUserByEmail(email string) (*User, error) {
 func (s *SQLiteStorage) UpdateUserPassword(email, password string) error {
 	query := `UPDATE users SET password = ? WHERE email = ?`
 	_, err := s.db.Exec(query, password, email)
+	return err
+}
+
+// GetUserCountByIP 获取IP创建的用户数量
+func (s *SQLiteStorage) GetUserCountByIP(ip string) (int, error) {
+	query := `SELECT COUNT(*) FROM users WHERE register_ip = ?`
+	var count int
+	err := s.db.QueryRow(query, ip).Scan(&count)
+	return count, err
+}
+
+// IncrementDomainCount 增加用户域名计数
+func (s *SQLiteStorage) IncrementDomainCount(userID int64) error {
+	query := `UPDATE users SET domain_count = domain_count + 1 WHERE id = ?`
+	_, err := s.db.Exec(query, userID)
+	return err
+}
+
+// DecrementDomainCount 减少用户域名计数
+func (s *SQLiteStorage) DecrementDomainCount(userID int64) error {
+	query := `UPDATE users SET domain_count = domain_count - 1 WHERE id = ? AND domain_count > 0`
+	_, err := s.db.Exec(query, userID)
 	return err
 }
 

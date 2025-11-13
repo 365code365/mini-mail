@@ -9,6 +9,7 @@ import (
 // MailDomain 邮箱域名记录
 type MailDomain struct {
 	ID         int64     `json:"id"`
+	UserID     int64     `json:"user_id"`
 	Subdomain  string    `json:"subdomain"`
 	FullDomain string    `json:"full_domain"`
 	RecordID   string    `json:"record_id"`
@@ -32,7 +33,7 @@ func (s *SQLiteStorage) CreateMailDomain(userID int64, subdomain, fullDomain, re
 // GetMailDomains 获取所有邮箱域名
 func (s *SQLiteStorage) GetMailDomains(userID int64) ([]*MailDomain, error) {
 	query := `
-	SELECT id, subdomain, full_domain, record_id, email, created_at
+	SELECT id, user_id, subdomain, full_domain, record_id, email, created_at
 	FROM mail_domains
 	WHERE user_id = ?
 	ORDER BY created_at DESC
@@ -46,7 +47,7 @@ func (s *SQLiteStorage) GetMailDomains(userID int64) ([]*MailDomain, error) {
 	var domains []*MailDomain
 	for rows.Next() {
 		var domain MailDomain
-		err := rows.Scan(&domain.ID, &domain.Subdomain, &domain.FullDomain, &domain.RecordID, &domain.Email, &domain.CreatedAt)
+		err := rows.Scan(&domain.ID, &domain.UserID, &domain.Subdomain, &domain.FullDomain, &domain.RecordID, &domain.Email, &domain.CreatedAt)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan mail domain: %v", err)
 		}
@@ -68,13 +69,13 @@ func (s *SQLiteStorage) DeleteMailDomain(userID int64, id int64) error {
 // GetMailDomainByEmail 根据邮箱地址获取域名
 func (s *SQLiteStorage) GetMailDomainByEmail(email string) (*MailDomain, error) {
 	query := `
-	SELECT id, subdomain, full_domain, record_id, email, created_at
+	SELECT id, user_id, subdomain, full_domain, record_id, email, created_at
 	FROM mail_domains
 	WHERE email = ?
 	LIMIT 1
 	`
 	var domain MailDomain
-	err := s.db.QueryRow(query, email).Scan(&domain.ID, &domain.Subdomain, &domain.FullDomain, &domain.RecordID, &domain.Email, &domain.CreatedAt)
+	err := s.db.QueryRow(query, email).Scan(&domain.ID, &domain.UserID, &domain.Subdomain, &domain.FullDomain, &domain.RecordID, &domain.Email, &domain.CreatedAt)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -82,4 +83,30 @@ func (s *SQLiteStorage) GetMailDomainByEmail(email string) (*MailDomain, error) 
 		return nil, fmt.Errorf("failed to query mail domain: %v", err)
 	}
 	return &domain, nil
+}
+
+// GetMailDomainsByDomain 根据域名查找所有记录（如 niuma946.com）
+func (s *SQLiteStorage) GetMailDomainsByDomain(domain string) ([]*MailDomain, error) {
+	query := `
+	SELECT id, user_id, subdomain, full_domain, record_id, email, created_at
+	FROM mail_domains
+	WHERE full_domain = ?
+	ORDER BY created_at DESC
+	`
+	rows, err := s.db.Query(query, domain)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query mail domains by domain: %v", err)
+	}
+	defer rows.Close()
+
+	var domains []*MailDomain
+	for rows.Next() {
+		var d MailDomain
+		err := rows.Scan(&d.ID, &d.UserID, &d.Subdomain, &d.FullDomain, &d.RecordID, &d.Email, &d.CreatedAt)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan mail domain: %v", err)
+		}
+		domains = append(domains, &d)
+	}
+	return domains, nil
 }

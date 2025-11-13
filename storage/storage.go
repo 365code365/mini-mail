@@ -33,11 +33,15 @@ type Storage interface {
 	GetMailDomains(userID int64) ([]*MailDomain, error)
 	DeleteMailDomain(userID int64, id int64) error
 	GetMailDomainByEmail(email string) (*MailDomain, error)
+	GetMailDomainsByDomain(domain string) ([]*MailDomain, error)
 
 	// 用户管理
-	CreateUser(email, password string) (*User, error)
+	CreateUser(email, password, registerIP string) (*User, error)
 	GetUserByEmail(email string) (*User, error)
 	UpdateUserPassword(email, password string) error
+	GetUserCountByIP(ip string) (int, error)
+	IncrementDomainCount(userID int64) error
+	DecrementDomainCount(userID int64) error
 
 	// 验证码管理
 	CreateVerifyCode(email string) (string, error)
@@ -73,9 +77,13 @@ func (s *SQLiteStorage) init() error {
 		id INTEGER PRIMARY KEY AUTOINCREMENT,
 		email TEXT NOT NULL UNIQUE,
 		password TEXT,
+		register_ip TEXT NOT NULL,
+		is_admin BOOLEAN DEFAULT 0,
+		domain_count INTEGER DEFAULT 0,
 		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
 	);
 	CREATE INDEX IF NOT EXISTS idx_user_email ON users(email);
+	CREATE INDEX IF NOT EXISTS idx_user_ip ON users(register_ip);
 	
 	-- 验证码表
 	CREATE TABLE IF NOT EXISTS verify_codes (

@@ -47,6 +47,8 @@ func (s *Server) setupRoutes() {
 	s.router.Use(corsMiddleware)
 
 	// 认证相关路由（不需要认证）
+	s.router.HandleFunc("/api/auth/register", s.register).Methods("POST", "OPTIONS")
+	s.router.HandleFunc("/api/auth/login", s.passwordLogin).Methods("POST", "OPTIONS")
 	s.router.HandleFunc("/api/auth/send-code", s.sendCode).Methods("POST", "OPTIONS")
 	s.router.HandleFunc("/api/auth/verify-code", s.verifyCode).Methods("POST", "OPTIONS")
 	s.router.HandleFunc("/api/auth/password-login", s.passwordLogin).Methods("POST", "OPTIONS")
@@ -217,6 +219,8 @@ func (s *Server) createDomain(w http.ResponseWriter, r *http.Request) {
 
 	// 获取当前用户ID
 	userID := getUserIDFromRequest(r)
+	// 获取用户邮箱
+	userEmail := r.Header.Get("X-User-Email")
 
 	var req struct {
 		Email string `json:"email"`
@@ -232,6 +236,23 @@ func (s *Server) createDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 检查用户是否达到创建限制（非管理员）
+	if userEmail != "admin@admin.com" {
+		user, err := s.storage.GetUserByEmail(userEmail)
+		if err != nil {
+			http.Error(w, "获取用户信息失败", http.StatusInternalServerError)
+			return
+		}
+
+		if user != nil && user.DomainCount >= 20 {
+			response := map[string]string{"error": "您已达到最大邮箱创建数量限制（20个）"}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
 	domain, err := s.dnsService.CreateMailDomain(userID, req.Email)
 	if err != nil {
 		response := map[string]string{"error": err.Error()}
@@ -240,6 +261,9 @@ func (s *Server) createDomain(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(response)
 		return
 	}
+
+	// 增加用户域名计数
+	s.storage.IncrementDomainCount(userID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(domain)
@@ -267,6 +291,9 @@ func (s *Server) deleteDomain(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+
+	// 减少用户域名计数
+	s.storage.DecrementDomainCount(userID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "success"})

@@ -28,18 +28,28 @@ type MailHandler interface {
 
 // Server SMTP服务器
 type Server struct {
-	Domain   string
-	Port     int
-	Handler  MailHandler
-	listener net.Listener
+	Domain      string
+	Port        int
+	Handler     MailHandler
+	Forwarder   *MailForwarder
+	listener    net.Listener
+	LocalDomain string // 本地主域名（用于判断是否本地邮件）
 }
 
 // NewServer 创建新的SMTP服务器
 func NewServer(domain string, port int, handler MailHandler) *Server {
+	// 从 domain 提取主域名（去除 "mail." 前缀）
+	localDomain := domain
+	if strings.HasPrefix(strings.ToLower(domain), "mail.") {
+		localDomain = domain[5:] // 去除 "mail." 前缀
+	}
+
 	return &Server{
-		Domain:  domain,
-		Port:    port,
-		Handler: handler,
+		Domain:      domain,
+		Port:        port,
+		Handler:     handler,
+		Forwarder:   NewMailForwarder(localDomain),
+		LocalDomain: localDomain,
 	}
 }
 
@@ -215,23 +225,50 @@ func (s *smtpSession) processMailData(data string) {
 		body = []byte("")
 	}
 
-	mailMsg := &MailMessage{
-		From:       s.mailFrom,
-		To:         s.rcptTo,
-		Subject:    msg.Header.Get("Subject"),
-		Body:       string(body),
-		RawData:    data,
-		ReceivedAt: time.Now(),
+	// 处理每个收件人
+	var localRecipients []string
+	var forwardErrors []string
+
+	for _, recipient := range s.rcptTo {
+		// 检查是否是本地域名
+		if s.server.Forwarder.isLocalDomain(recipient) {
+			localRecipients = append(localRecipients, recipient)
+			log.Printf("[SMTP] 本地邮件: %s", recipient)
+		} else {
+			// 转发到外部邮箱
+			log.Printf("[SMTP] 准备转发外部邮件: %s", recipient)
+			err := s.server.Forwarder.Forward(s.mailFrom, recipient, data)
+			if err != nil {
+				log.Printf("[SMTP] 转发失败: %v", err)
+				forwardErrors = append(forwardErrors, fmt.Sprintf("%s: %v", recipient, err))
+			} else {
+				log.Printf("[SMTP] ✓ 邮件已转发到: %s", recipient)
+			}
+		}
 	}
 
-	// 调用处理器
-	if s.server.Handler != nil {
-		err := s.server.Handler.HandleMail(mailMsg)
+	// 如果有本地收件人，调用本地处理器保存
+	if len(localRecipients) > 0 && s.server.Handler != nil {
+		localMsg := &MailMessage{
+			From:       s.mailFrom,
+			To:         localRecipients,
+			Subject:    msg.Header.Get("Subject"),
+			Body:       string(body),
+			RawData:    data,
+			ReceivedAt: time.Now(),
+		}
+		err := s.server.Handler.HandleMail(localMsg)
 		if err != nil {
-			log.Printf("failed to handle mail: %v", err)
-			s.writeLine("550 Failed to process message")
+			log.Printf("failed to handle local mail: %v", err)
+			s.writeLine("550 Failed to process local message")
 			return
 		}
+	}
+
+	// 返回响应
+	if len(forwardErrors) > 0 {
+		log.Printf("[SMTP] 部分邮件转发失败: %v", forwardErrors)
+		// 即使转发失败，也返回成功，避免重复发送
 	}
 
 	s.writeLine("250 OK: Message accepted for delivery")
