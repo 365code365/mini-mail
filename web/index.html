@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>邮箱服务管理面板</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            background: white;
+            padding: 20px 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            color: #333;
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .tab {
+            padding: 10px 20px;
+            background: #f0f0f0;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: all 0.3s;
+        }
+
+        .tab.active {
+            background: #667eea;
+            color: white;
+        }
+
+        .tab:hover {
+            background: #7c8fef;
+            color: white;
+        }
+
+        .panel {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            display: none;
+            min-height: 500px;
+        }
+
+        .panel.active {
+            display: block;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+            color: #333;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s;
+            white-space: nowrap;
+            min-width: 80px;
+        }
+
+        .btn-primary {
+            background: #667eea;
+            color: white;
+            padding: 8px 20px;
+            font-size: 14px;
+        }
+
+        .btn-primary:hover {
+            background: #5568d3;
+        }
+
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+            padding: 8px 20px;
+            font-size: 14px;
+        }
+
+        .btn-danger:hover {
+            background: #c0392b;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            table-layout: fixed;
+        }
+
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #333;
+            white-space: nowrap;
+        }
+
+        /* 设置列宽 */
+        .domains-table th:nth-child(1),
+        .domains-table td:nth-child(1) { width: 30%; }
+        .domains-table th:nth-child(2),
+        .domains-table td:nth-child(2) { width: 35%; }
+        .domains-table th:nth-child(3),
+        .domains-table td:nth-child(3) { width: 20%; }
+        .domains-table th:nth-child(4),
+        .domains-table td:nth-child(4) { width: 15%; }
+
+        .mails-table th:nth-child(1),
+        .mails-table td:nth-child(1) { width: 25%; }
+        .mails-table th:nth-child(2),
+        .mails-table td:nth-child(2) { width: 25%; }
+        .mails-table th:nth-child(3),
+        .mails-table td:nth-child(3) { width: 25%; }
+        .mails-table th:nth-child(4),
+        .mails-table td:nth-child(4) { width: 15%; }
+        .mails-table th:nth-child(5),
+        .mails-table td:nth-child(5) { width: 10%; text-align: center; }
+
+        tr:hover {
+            background: #f8f9fa;
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-success {
+            background: #d4edda;
+            color: #155724;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 40px;
+            color: #666;
+            min-height: 200px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .alert {
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .alert-success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .alert-error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .stat-card h3 {
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 10px;
+        }
+
+        .stat-card .number {
+            color: #333;
+            font-size: 32px;
+            font-weight: bold;
+        }
+
+        .domain-info {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+        }
+
+        .domain-info p {
+            margin: 5px 0;
+            color: #666;
+        }
+
+        .domain-info strong {
+            color: #333;
+        }
+
+        .copy-btn {
+            padding: 4px 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-left: 10px;
+        }
+
+        .copy-btn:hover {
+            background: #5568d3;
+        }
+
+        /* 邮件详情模态框 */
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            overflow: auto;
+        }
+
+        .modal.active {
+            display: block;
+        }
+
+        .modal-content {
+            background-color: white;
+            margin: 50px auto;
+            padding: 0;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 800px;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .modal-header {
+            padding: 20px 30px;
+            border-bottom: 1px solid #ddd;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            color: #333;
+            font-size: 24px;
+        }
+
+        .close {
+            color: #aaa;
+            font-size: 28px;
+            font-weight: bold;
+            cursor: pointer;
+            border: none;
+            background: none;
+            padding: 0;
+            width: 30px;
+            height: 30px;
+            line-height: 30px;
+            text-align: center;
+        }
+
+        .close:hover,
+        .close:focus {
+            color: #000;
+        }
+
+        .modal-body {
+            padding: 30px;
+        }
+
+        .mail-detail {
+            line-height: 1.8;
+        }
+
+        .mail-detail .field {
+            margin-bottom: 20px;
+        }
+
+        .mail-detail .label {
+            font-weight: 600;
+            color: #666;
+            margin-bottom: 5px;
+        }
+
+        .mail-detail .value {
+            color: #333;
+            background: #f8f9fa;
+            padding: 10px 15px;
+            border-radius: 5px;
+            word-break: break-all;
+        }
+
+        .mail-detail .body {
+            white-space: pre-wrap;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .no-data {
+            text-align: center;
+            padding: 60px 40px;
+            color: #999;
+            font-size: 16px;
+            min-height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📧 邮箱服务管理面板</h1>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div class="tabs">
+                    <button class="tab active" onclick="showTab('dns')">DNS管理</button>
+                    <button class="tab" onclick="showTab('mails')">邮件列表</button>
+                    <button class="tab" onclick="showTab('stats')">统计信息</button>
+                </div>
+                <button class="btn btn-danger" onclick="logout()" style="padding: 8px 20px; font-size: 14px;">退出登录</button>
+            </div>
+        </div>
+
+        <!-- DNS管理面板 -->
+        <div id="dns-panel" class="panel active">
+            <h2>邮箱域名管理</h2>
+            <div id="dns-alert"></div>
+            
+            <div class="form-group">
+                <label>注册邮箱</label>
+                <div style="display: flex; gap: 10px; align-items: center;">
+                    <input type="text" id="email-prefix" placeholder="输入邮箱前缀，例如: hello" style="flex: 1;">
+                    <span style="font-size: 16px; color: #666;">@niuma946.com</span>
+                    <button class="btn btn-primary" onclick="createMailDomain()">注册邮箱</button>
+                </div>
+                <small style="color: #666; margin-top: 5px; display: block;">输入邮箱前缀后将自动注册为 xxxx@niuma946.com 格式</small>
+            </div>
+
+            <h3 style="margin-top: 30px;">已创建的邮箱域名</h3>
+            <div id="domains-loading" class="loading">加载中...</div>
+            <table id="domains-table" class="domains-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>邮箱地址</th>
+                        <th>域名</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="domains-tbody"></tbody>
+            </table>
+        </div>
+
+        <!-- 邮件列表面板 -->
+        <div id="mails-panel" class="panel">
+            <h2>收到的邮件</h2>
+            <div id="mails-loading" class="loading">加载中...</div>
+            <table id="mails-table" class="mails-table" style="display: none;">
+                <thead>
+                    <tr>
+                        <th>发件人</th>
+                        <th>收件人</th>
+                        <th>主题</th>
+                        <th>接收时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="mails-tbody"></tbody>
+            </table>
+        </div>
+
+        <!-- 统计信息面板 -->
+        <div id="stats-panel" class="panel">
+            <h2>统计信息</h2>
+            <div class="stats">
+                <div class="stat-card">
+                    <h3>邮件总数</h3>
+                    <div class="number" id="total-mails">-</div>
+                </div>
+                <div class="stat-card">
+                    <h3>邮箱域名数</h3>
+                    <div class="number" id="total-domains">-</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 邮件详情模态框 -->
+    <div id="mail-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>📧 邮件详情</h2>
+                <button class="close" onclick="closeMailModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="mail-detail-content" class="mail-detail">
+                    <div class="loading">加载中...</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api';
+
+        // 检查登录状态
+        function checkAuth() {
+            const token = localStorage.getItem('token');
+            const expiry = localStorage.getItem('tokenExpiry');
+            
+            if (!token || !expiry || Date.now() >= expiry * 1000) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('tokenExpiry');
+                window.location.href = '/login.html';
+                return false;
+            }
+            return true;
+        }
+
+        // 获取请求头（带token）
+        function getAuthHeaders() {
+            const token = localStorage.getItem('token');
+            return {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
+            };
+        }
+
+        // 处理401未授权错误
+        function handleUnauthorized() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('tokenExpiry');
+            window.location.href = '/login.html';
+        }
+
+        // 页面加载时检查认证
+        if (!checkAuth()) {
+            throw new Error('Not authenticated');
+        }
+
+        // 标签切换
+        function showTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(p => p.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tab + '-panel').classList.add('active');
+            
+            if (tab === 'dns') loadDomains();
+            if (tab === 'mails') loadMails();
+            if (tab === 'stats') loadStats();
+        }
+
+        // 显示提示消息
+        function showAlert(message, type = 'success') {
+            const alert = document.getElementById('dns-alert');
+            alert.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            setTimeout(() => alert.innerHTML = '', 5000);
+        }
+
+        // 创建邮箱域名
+        async function createMailDomain() {
+            const prefix = document.getElementById('email-prefix').value.trim();
+            if (!prefix) {
+                showAlert('请输入邮箱前缀', 'error');
+                return;
+            }
+
+            // 验证前缀格式（只允许字母、数字、.、-、_）
+            if (!/^[a-zA-Z0-9._-]+$/.test(prefix)) {
+                showAlert('邮箱前缀只能包含字母、数字、.、-、_', 'error');
+                return;
+            }
+
+            const email = prefix + '@niuma946.com';
+
+            try {
+                const response = await fetch(`${API_BASE}/domains`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({ email })
+                });
+
+                if (response.status === 401) {
+                    handleUnauthorized();
+                    return;
+                }
+
+                if (!response.ok) {
+                    const error = await response.json();
+                    throw new Error(error.error || '创建失败');
+                }
+
+                const data = await response.json();
+                showAlert(`邮箱注册成功！邮箱地址: ${email}`);
+                document.getElementById('email-prefix').value = '';
+                loadDomains();
+            } catch (error) {
+                showAlert(error.message, 'error');
+            }
+        }
+
+        // 加载域名列表
+        async function loadDomains() {
+            try {
+                const response = await fetch(`${API_BASE}/domains`, {
+                    headers: getAuthHeaders()
+                });
+
+                if (response.status === 401) {
+                    handleUnauthorized();
+                    return;
+                }
+
+                const data = await response.json();
+                
+                document.getElementById('domains-loading').style.display = 'none';
+                document.getElementById('domains-table').style.display = 'table';
+                
+                const tbody = document.getElementById('domains-tbody');
+                
+                if (!data.domains || data.domains.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="no-data">暂无邮箱，请注册一个邮箱</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = data.domains.map(d => `
+                    <tr>
+                        <td>${d.email}</td>
+                        <td>
+                            <strong>${d.full_domain}</strong>
+                            <button class="copy-btn" onclick="copyText('${d.full_domain}')">复制</button>
+                        </td>
+                        <td>${new Date(d.created_at).toLocaleString('zh-CN')}</td>
+                        <td>
+                            <button class="btn btn-danger" onclick="deleteDomain(${d.id})">删除</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('加载域名列表失败:', error);
+                document.getElementById('domains-tbody').innerHTML = 
+                    '<tr><td colspan="4" class="no-data">加载失败，请刷新页面</td></tr>';
+            }
+        }
+
+        // 删除域名
+        async function deleteDomain(id) {
+            if (!confirm('确定要删除这个邮箱域名吗?')) return;
+
+            try {
+                const response = await fetch(`${API_BASE}/domains/${id}`, {
+                    method: 'DELETE',
+                    headers: getAuthHeaders()
+                });
+
+                if (response.status === 401) {
+                    handleUnauthorized();
+                    return;
+                }
+
+                if (!response.ok) throw new Error('删除失败');
+
+                showAlert('域名删除成功');
+                loadDomains();
+            } catch (error) {
+                showAlert(error.message, 'error');
+            }
+        }
+
+        // 加载邮件列表
+        async function loadMails() {
+            try {
+                const response = await fetch(`${API_BASE}/mails?limit=50`, {
+                    headers: getAuthHeaders()
+                });
+
+                if (response.status === 401) {
+                    handleUnauthorized();
+                    return;
+                }
+                const data = await response.json();
+                
+                document.getElementById('mails-loading').style.display = 'none';
+                document.getElementById('mails-table').style.display = 'table';
+                
+                const tbody = document.getElementById('mails-tbody');
+                
+                if (!data.mails || data.mails.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="no-data">暂无邮件</td></tr>';
+                    return;
+                }
+                
+                tbody.innerHTML = data.mails.map(m => `
+                    <tr>
+                        <td>${m.from}</td>
+                        <td>${m.to}</td>
+                        <td>${m.subject || '(无主题)'}</td>
+                        <td>${new Date(m.received_at).toLocaleString('zh-CN')}</td>
+                        <td>
+                            <button class="btn btn-primary" onclick="viewMail(${m.id})">查看</button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (error) {
+                console.error('加载邮件列表失败:', error);
+                document.getElementById('mails-tbody').innerHTML = 
+                    '<tr><td colspan="5" class="no-data">加载失败，请刷新页面</td></tr>';
+            }
+        }
+
+        // 查看邮件详情
+        async function viewMail(id) {
+            const modal = document.getElementById('mail-modal');
+            const content = document.getElementById('mail-detail-content');
+            
+            modal.classList.add('active');
+            content.innerHTML = '<div class="loading">加载中...</div>';
+
+            try {
+                const response = await fetch(`${API_BASE}/mails/${id}`, {
+                    headers: getAuthHeaders()
+                });
+
+                if (response.status === 401) {
+                    handleUnauthorized();
+                    return;
+                }
+
+                if (!response.ok) throw new Error('加载失败');
+                
+                const mail = await response.json();
+                
+                content.innerHTML = `
+                    <div class="field">
+                        <div class="label">发件人</div>
+                        <div class="value">${mail.from}</div>
+                    </div>
+                    <div class="field">
+                        <div class="label">收件人</div>
+                        <div class="value">${mail.to}</div>
+                    </div>
+                    <div class="field">
+                        <div class="label">主题</div>
+                        <div class="value">${mail.subject || '(无主题)'}</div>
+                    </div>
+                    <div class="field">
+                        <div class="label">接收时间</div>
+                        <div class="value">${new Date(mail.received_at).toLocaleString('zh-CN')}</div>
+                    </div>
+                    <div class="field">
+                        <div class="label">邮件内容</div>
+                        <div class="value body">${mail.body || '(空)'}</div>
+                    </div>
+                `;
+            } catch (error) {
+                content.innerHTML = `<div class="alert alert-error">加载失败: ${error.message}</div>`;
+            }
+        }
+
+        // 关闭邮件详情模态框
+        function closeMailModal() {
+            document.getElementById('mail-modal').classList.remove('active');
+        }
+
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            const modal = document.getElementById('mail-modal');
+            if (event.target === modal) {
+                closeMailModal();
+            }
+        }
+
+        // 加载统计信息
+        async function loadStats() {
+            try {
+                const headers = getAuthHeaders();
+                const [mailsRes, domainsRes] = await Promise.all([
+                    fetch(`${API_BASE}/stats`, { headers }),
+                    fetch(`${API_BASE}/domains`, { headers })
+                ]);
+
+                if (mailsRes.status === 401 || domainsRes.status === 401) {
+                    handleUnauthorized();
+                    return;
+                }
+
+                const mailsData = await mailsRes.json();
+                const domainsData = await domainsRes.json();
+
+                document.getElementById('total-mails').textContent = mailsData.total_mails || 0;
+                document.getElementById('total-domains').textContent = domainsData.domains.length || 0;
+            } catch (error) {
+                console.error('加载统计信息失败:', error);
+            }
+        }
+
+        // 复制文本
+        function copyText(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showAlert('已复制到剪贴板');
+            });
+        }
+
+        // 退出登录
+        function logout() {
+            if (confirm('确定要退出登录吗？')) {
+                localStorage.removeItem('token');
+                localStorage.removeItem('tokenExpiry');
+                window.location.href = '/login.html';
+            }
+        }
+
+        // 初始化
+        loadDomains();
+    </script>
+</body>
+</html>

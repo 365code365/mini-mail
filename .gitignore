@@ -1,0 +1,6 @@
+mails.db
+*.log
+.DS_Store
+/.deploy-systemd.service
+/mail-server-deploy.tar.gz
+/服务器信息.txt

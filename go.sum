@@ -1,0 +1,11 @@
+github.com/golang-jwt/jwt/v5 v5.3.0 h1:pv4AsKCKKZuqlgs5sUmn4x8UlGa0kEVt/puTpKx9vvo=
+github.com/golang-jwt/jwt/v5 v5.3.0/go.mod h1:fxCRLWMO43lRc8nhHWY6LGqRcf+1gQWArsqaEUEa5bE=
+github.com/gorilla/mux v1.8.1 h1:TuBL49tXwgrFYWhqrNgrUNEY92u81SPhu7sTdzQEiWY=
+github.com/gorilla/mux v1.8.1/go.mod h1:AKf9I4AEqPTmMytcMc0KkNouC66V3BtZ4qD5fmWSiMQ=
+github.com/mattn/go-sqlite3 v1.14.32 h1:JD12Ag3oLy1zQA+BNn74xRgaBbdhbNIDYvQUEuuErjs=
+github.com/mattn/go-sqlite3 v1.14.32/go.mod h1:Uh1q+B4BYcTPb+yiD3kU8Ct7aC0hY9fxUwlHK0RXw+Y=
+github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.1.50/go.mod h1:r5r4xbfxSaeR04b166HGsBa/R4U3SueirEUpXGuw+Q0=
+github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.1.54 h1:x5RDHAeU6YJ1oOZSXRuWJbywW+2P4d3kYuV2FrMe7as=
+github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.1.54/go.mod h1:r5r4xbfxSaeR04b166HGsBa/R4U3SueirEUpXGuw+Q0=
+github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/dnspod v1.1.50 h1:KpNlPUVOP+4fDHnWxZTB0M6Uw02IitzA7e2jS+Xf+dY=
+github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/dnspod v1.1.50/go.mod h1:QUYp0Sgf0iQ9vvq/lkASp6UkoipAW0UVcGLlIVbW/XQ=

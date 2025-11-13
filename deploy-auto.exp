@@ -1,0 +1,89 @@
+#!/usr/bin/expect -f
+
+set timeout 300
+set server "root@124.156.188.238"
+set password "a1039385286"
+set remote_dir "/opt/mail-server"
+
+# 编译
+puts "\n===== 编译项目 =====\n"
+spawn bash -c "cd /Users/shengye/qoder/mail && GOOS=linux GOARCH=amd64 go build -o mail-server-linux"
+expect eof
+
+# 创建目录
+puts "\n===== 创建远程目录 =====\n"
+spawn ssh $server "mkdir -p $remote_dir"
+expect {
+    "password:" {
+        send "$password\r"
+        expect eof
+    }
+    "yes/no" {
+        send "yes\r"
+        expect "password:"
+        send "$password\r"
+        expect eof
+    }
+}
+
+# 上传可执行文件
+puts "\n===== 上传可执行文件 =====\n"
+spawn scp /Users/shengye/qoder/mail/mail-server-linux $server:$remote_dir/mail-server
+expect {
+    "password:" {
+        send "$password\r"
+        expect eof
+    }
+}
+
+# 上传web目录
+puts "\n===== 上传web目录 =====\n"
+spawn scp -r /Users/shengye/qoder/mail/web $server:$remote_dir/
+expect {
+    "password:" {
+        send "$password\r"
+        expect eof
+    }
+}
+
+# 创建systemd服务文件
+puts "\n===== 配置systemd服务 =====\n"
+spawn scp /Users/shengye/qoder/mail/.deploy-systemd.service $server:/tmp/mail-server.service
+expect {
+    "password:" {
+        send "$password\r"
+        expect eof
+    }
+}
+
+# 安装并启动服务
+puts "\n===== 启动服务 =====\n"
+spawn ssh $server
+expect "password:"
+send "$password\r"
+expect "# "
+send "mv /tmp/mail-server.service /etc/systemd/system/\r"
+expect "# "
+send "systemctl daemon-reload\r"
+expect "# "
+send "chmod +x $remote_dir/mail-server\r"
+expect "# "
+send "firewall-cmd --permanent --add-port=25/tcp\r"
+expect "# "
+send "firewall-cmd --permanent --add-port=9989/tcp\r"
+expect "# "
+send "firewall-cmd --reload\r"
+expect "# "
+send "systemctl enable mail-server\r"
+expect "# "
+send "systemctl restart mail-server\r"
+expect "# "
+send "sleep 2\r"
+expect "# "
+send "systemctl status mail-server\r"
+expect "# "
+send "exit\r"
+expect eof
+
+puts "\n===== 部署完成 =====\n"
+puts "服务地址: http://124.156.188.238:9989/\n"
