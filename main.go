@@ -69,18 +69,18 @@ func (h *MailHandler) HandleMail(msg *smtp.MailMessage) error {
 func main() {
 	// 配置
 	config := Config{
-		Domain:           "niuma946.com",                         // 主域名
-		SMTPPort:         25,                                     // SMTP端口
-		HTTPPort:         9989,                                   // HTTP API端口
-		DatabasePath:     "./mails.db",                           // 数据库文件路径
-		PublicIP:         "124.156.188.238",                      // 公网IP
-		TencentSecretID:  "AKIDWAcqxOjsoX3MRK2XobHpFXezBJOF98xZ", // 腾讯云SecretID
-		TencentSecretKey: "VmqgHjy0pSzKRK1VmpePyJSP9g060nMi",     // 腾讯云SecretKey
+		Domain:           "",           // 主域名
+		SMTPPort:         25,           // SMTP端口
+		HTTPPort:         9989,         // HTTP API端口
+		DatabasePath:     "./mails.db", // 数据库文件路径
+		PublicIP:         "",           // 公网IP
+		TencentSecretID:  "",           // 腾讯云SecretID
+		TencentSecretKey: "",           // 腾讯云SecretKey
 		// 邮件发送配置（使用自己的SMTP服务器）
-		EmailSMTPHost: "127.0.0.1",          // 本地SMTP服务器
-		EmailSMTPPort: 25,                   // SMTP端口
-		EmailSender:   "admin@niuma946.com", // 发件人邮箱
-		EmailPassword: "",                   // 无需密码（本地服务器）
+		EmailSMTPHost: "127.0.0.1", // 本地SMTP服务器
+		EmailSMTPPort: 25,          // SMTP端口
+		EmailSender:   "",          // 发件人邮箱
+		EmailPassword: "",          // 无需密码（本地服务器）
 	}
 
 	// 初始化存储
