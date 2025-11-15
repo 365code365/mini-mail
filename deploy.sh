@@ -104,7 +104,7 @@ fi
 echo "✓ 编译完成"
 echo ""
 
-# 3. 上传web目录
+# 3. 上传web目录和配置文件
 echo "[3/6] 上传web目录..."
 ${SCP_CMD} -r web ${SERVER}:${REMOTE_DIR}/
 if [ $? -ne 0 ]; then
@@ -112,6 +112,19 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 echo "✓ Web目录上传成功"
+
+# 上传配置文件
+echo "上传配置文件..."
+if [ -f "config.yaml" ]; then
+    ${SCP_CMD} config.yaml ${SERVER}:${REMOTE_DIR}/
+    if [ $? -ne 0 ]; then
+        echo "❌ 配置文件上传失败!"
+        exit 1
+    fi
+    echo "✓ 配置文件上传成功"
+else
+    echo "⚠️  配置文件config.yaml不存在，使用默认配置"
+fi
 echo ""
 
 # 4. 配置systemd服务

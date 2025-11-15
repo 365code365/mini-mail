@@ -2,9 +2,11 @@ package services
 
 import (
 	"bytes"
+	"crypto/tls"
 	"fmt"
 	"html/template"
 	"net/smtp"
+	"strings"
 )
 
 // EmailSender 邮件发送服务
@@ -35,6 +37,102 @@ func (e *EmailSender) SendVerifyCode(to, code string) error {
 	return e.sendHTML(to, subject, body)
 }
 
+// SendEmail 发送通用邮件
+func (e *EmailSender) SendEmail(to, subject, htmlBody string) error {
+	return e.sendHTML(to, subject, htmlBody)
+}
+
+// SendTextEmail 发送纯文本邮件
+func (e *EmailSender) SendTextEmail(to, subject, textBody string) error {
+	// 构建邮件头
+	headers := make(map[string]string)
+	headers["From"] = fmt.Sprintf("%s <%s>", e.senderName, e.senderEmail)
+	headers["To"] = to
+	headers["Subject"] = subject
+	headers["MIME-Version"] = "1.0"
+	headers["Content-Type"] = "text/plain; charset=UTF-8"
+
+	// 组装邮件内容
+	message := ""
+	for k, v := range headers {
+		message += fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+	message += "\r\n" + textBody
+
+	// 连接SMTP服务器并发送邮件
+	addr := fmt.Sprintf("%s:%d", e.smtpHost, e.smtpPort)
+	fmt.Printf("[EmailSender] 正在发送文本邮件到 %s，使用SMTP服务器: %s\n", to, addr)
+
+	// 创建客户端连接
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return fmt.Errorf("连接SMTP服务器失败: %v", err)
+	}
+	defer client.Close()
+
+	// 发送HELO
+	if err = client.Hello("localhost"); err != nil {
+		return fmt.Errorf("HELO失败: %v", err)
+	}
+
+	// 对于587端口，尝试启动TLS（但本地服务器可能不支持）
+	if e.smtpPort == 587 {
+		// 检查是否是本地服务器，如果是则跳过TLS
+		isLocal := e.smtpHost == "localhost" ||
+			e.smtpHost == "127.0.0.1" ||
+			strings.HasPrefix(e.smtpHost, "mail.") ||
+			strings.HasSuffix(e.smtpHost, ".local") ||
+			strings.HasSuffix(e.smtpHost, ".lan")
+
+		if !isLocal {
+			tlsConfig := &tls.Config{
+				ServerName:         e.smtpHost,
+				InsecureSkipVerify: true, // 对于自签名证书
+			}
+			if err = client.StartTLS(tlsConfig); err != nil {
+				fmt.Printf("[EmailSender] STARTTLS失败: %v\n", err)
+				return fmt.Errorf("STARTTLS失败: %v", err)
+			}
+			fmt.Printf("[EmailSender] ✓ TLS已启动\n")
+		} else {
+			fmt.Printf("[EmailSender] 检测到本地服务器，跳过TLS\n")
+		}
+	}
+
+	// 如果有密码，进行认证
+	if e.password != "" {
+		auth := smtp.PlainAuth("", e.senderEmail, e.password, e.smtpHost)
+		if err = client.Auth(auth); err != nil {
+			return fmt.Errorf("SMTP认证失败: %v", err)
+		}
+	}
+
+	// 设置发件人
+	if err = client.Mail(e.senderEmail); err != nil {
+		return fmt.Errorf("设置发件人失败: %v", err)
+	}
+
+	// 设置收件人
+	if err = client.Rcpt(to); err != nil {
+		return fmt.Errorf("设置收件人失败: %v", err)
+	}
+
+	// 发送邮件内容
+	wc, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("获取数据写入器失败: %v", err)
+	}
+	defer wc.Close()
+
+	_, err = fmt.Fprintf(wc, "%s", message)
+	if err != nil {
+		return fmt.Errorf("写入邮件内容失败: %v", err)
+	}
+
+	fmt.Printf("[EmailSender] ✓ 邮件发送成功！\n")
+	return nil
+}
+
 // sendHTML 发送HTML邮件
 func (e *EmailSender) sendHTML(to, subject, htmlBody string) error {
 	// 构建邮件头
@@ -52,30 +150,78 @@ func (e *EmailSender) sendHTML(to, subject, htmlBody string) error {
 	}
 	message += "\r\n" + htmlBody
 
-	// 直接使用明文SMTP发送（不使用TLS）
+	// 连接SMTP服务器并发送邮件
 	addr := fmt.Sprintf("%s:%d", e.smtpHost, e.smtpPort)
 	fmt.Printf("[EmailSender] 正在发送邮件到 %s，使用SMTP服务器: %s\n", to, addr)
 
-	// 如果没有密码，直接发送无需认证
-	if e.password == "" {
-		err := smtp.SendMail(addr, nil, e.senderEmail, []string{to}, []byte(message))
-		if err != nil {
-			fmt.Printf("[EmailSender] 发送失败: %v\n", err)
-		} else {
-			fmt.Printf("[EmailSender] 发送成功！\n")
-		}
-		return err
+	// 创建客户端连接
+	client, err := smtp.Dial(addr)
+	if err != nil {
+		return fmt.Errorf("连接SMTP服务器失败: %v", err)
+	}
+	defer client.Close()
+
+	// 发送HELO
+	if err = client.Hello("localhost"); err != nil {
+		return fmt.Errorf("HELO失败: %v", err)
 	}
 
-	// 如果有密码，使用认证
-	auth := smtp.PlainAuth("", e.senderEmail, e.password, e.smtpHost)
-	err := smtp.SendMail(addr, auth, e.senderEmail, []string{to}, []byte(message))
-	if err != nil {
-		fmt.Printf("[EmailSender] 发送失败: %v\n", err)
-	} else {
-		fmt.Printf("[EmailSender] 发送成功！\n")
+	// 对于587端口，尝试启动TLS（但本地服务器可能不支持）
+	if e.smtpPort == 587 {
+		// 检查是否是本地服务器，如果是则跳过TLS
+		isLocal := e.smtpHost == "localhost" ||
+			e.smtpHost == "127.0.0.1" ||
+			strings.HasPrefix(e.smtpHost, "mail.") ||
+			strings.HasSuffix(e.smtpHost, ".local") ||
+			strings.HasSuffix(e.smtpHost, ".lan")
+
+		if !isLocal {
+			tlsConfig := &tls.Config{
+				ServerName:         e.smtpHost,
+				InsecureSkipVerify: true, // 对于自签名证书
+			}
+			if err = client.StartTLS(tlsConfig); err != nil {
+				fmt.Printf("[EmailSender] STARTTLS失败: %v\n", err)
+				return fmt.Errorf("STARTTLS失败: %v", err)
+			}
+			fmt.Printf("[EmailSender] ✓ TLS已启动\n")
+		} else {
+			fmt.Printf("[EmailSender] 检测到本地服务器，跳过TLS\n")
+		}
 	}
-	return err
+
+	// 如果有密码，进行认证
+	if e.password != "" {
+		auth := smtp.PlainAuth("", e.senderEmail, e.password, e.smtpHost)
+		if err = client.Auth(auth); err != nil {
+			return fmt.Errorf("SMTP认证失败: %v", err)
+		}
+	}
+
+	// 设置发件人
+	if err = client.Mail(e.senderEmail); err != nil {
+		return fmt.Errorf("设置发件人失败: %v", err)
+	}
+
+	// 设置收件人
+	if err = client.Rcpt(to); err != nil {
+		return fmt.Errorf("设置收件人失败: %v", err)
+	}
+
+	// 发送邮件内容
+	wc, err := client.Data()
+	if err != nil {
+		return fmt.Errorf("获取数据写入器失败: %v", err)
+	}
+	defer wc.Close()
+
+	_, err = fmt.Fprintf(wc, "%s", message)
+	if err != nil {
+		return fmt.Errorf("写入邮件内容失败: %v", err)
+	}
+
+	fmt.Printf("[EmailSender] ✓ 邮件发送成功！\n")
+	return nil
 }
 
 // generateVerifyCodeHTML 生成验证码邮件HTML模板

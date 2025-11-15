@@ -37,18 +37,25 @@ type Server struct {
 }
 
 // NewServer 创建新的SMTP服务器
-func NewServer(domain string, port int, handler MailHandler) *Server {
+func NewServer(domain string, port int, handler MailHandler, forwardEnabled bool) *Server {
 	// 从 domain 提取主域名（去除 "mail." 前缀）
 	localDomain := domain
 	if strings.HasPrefix(strings.ToLower(domain), "mail.") {
 		localDomain = domain[5:] // 去除 "mail." 前缀
 	}
 
+	var forwarder *MailForwarder
+	if forwardEnabled {
+		forwarder = NewMailForwarder(localDomain)
+	} else {
+		forwarder = nil // 禁用转发
+	}
+
 	return &Server{
 		Domain:      domain,
 		Port:        port,
 		Handler:     handler,
-		Forwarder:   NewMailForwarder(localDomain),
+		Forwarder:   forwarder,
 		LocalDomain: localDomain,
 	}
 }
@@ -231,10 +238,10 @@ func (s *smtpSession) processMailData(data string) {
 
 	for _, recipient := range s.rcptTo {
 		// 检查是否是本地域名
-		if s.server.Forwarder.isLocalDomain(recipient) {
+		if s.server.Forwarder != nil && s.server.Forwarder.isLocalDomain(recipient) {
 			localRecipients = append(localRecipients, recipient)
 			log.Printf("[SMTP] 本地邮件: %s", recipient)
-		} else {
+		} else if s.server.Forwarder != nil {
 			// 转发到外部邮箱
 			log.Printf("[SMTP] 准备转发外部邮件: %s", recipient)
 			err := s.server.Forwarder.Forward(s.mailFrom, recipient, data)
@@ -244,6 +251,10 @@ func (s *smtpSession) processMailData(data string) {
 			} else {
 				log.Printf("[SMTP] ✓ 邮件已转发到: %s", recipient)
 			}
+		} else {
+			// 转发功能已禁用，记录但不转发
+			log.Printf("[SMTP] 转发功能已禁用，跳过外部邮件: %s", recipient)
+			forwardErrors = append(forwardErrors, fmt.Sprintf("%s: 转发功能已禁用", recipient))
 		}
 	}
 

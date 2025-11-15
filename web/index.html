@@ -128,6 +128,18 @@
             background: #c0392b;
         }
 
+        .btn-success {
+            background: #27ae60;
+            color: white;
+            padding: 8px 20px;
+            font-size: 14px;
+            margin-right: 5px;
+        }
+
+        .btn-success:hover {
+            background: #229954;
+        }
+
         table {
             width: 100%;
             border-collapse: collapse;
@@ -152,13 +164,13 @@
 
         /* 设置列宽 */
         .domains-table th:nth-child(1),
-        .domains-table td:nth-child(1) { width: 30%; }
+        .domains-table td:nth-child(1) { width: 25%; }
         .domains-table th:nth-child(2),
-        .domains-table td:nth-child(2) { width: 35%; }
+        .domains-table td:nth-child(2) { width: 30%; }
         .domains-table th:nth-child(3),
         .domains-table td:nth-child(3) { width: 20%; }
         .domains-table th:nth-child(4),
-        .domains-table td:nth-child(4) { width: 15%; }
+        .domains-table td:nth-child(4) { width: 25%; }
 
         .mails-table th:nth-child(1),
         .mails-table td:nth-child(1) { width: 25%; }
@@ -214,6 +226,26 @@
             background: #f8d7da;
             color: #721c24;
             border: 1px solid #f5c6cb;
+        }
+
+        .alert-sending {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+
+        .loading-spinner {
+            width: 16px;
+            height: 16px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid #0c5460;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
         }
 
         .stats {
@@ -469,6 +501,46 @@
         </div>
     </div>
 
+    <!-- 写邮件模态框 -->
+    <div id="compose-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>✉️ 撰写邮件</h2>
+                <button class="close" onclick="closeComposeModal()">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div id="compose-alert"></div>
+                <form id="compose-form">
+                    <div class="form-group">
+                        <label for="compose-from">发件人</label>
+                        <input type="email" id="compose-from" readonly style="background: #f8f9fa; color: #666;">
+                        <small style="color: #666;">使用已创建的邮箱作为发件人</small>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="compose-to">收件人</label>
+                        <input type="email" id="compose-to" placeholder="输入收件人邮箱地址" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="compose-subject">主题</label>
+                        <input type="text" id="compose-subject" placeholder="输入邮件主题" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="compose-body">邮件内容</label>
+                        <textarea id="compose-body" rows="10" placeholder="输入邮件内容..." style="width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; resize: vertical;" required></textarea>
+                    </div>
+                    
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button type="button" class="btn" onclick="closeComposeModal()" style="background: #6c757d; color: white;">取消</button>
+                        <button type="submit" class="btn btn-primary">发送邮件</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
         const API_BASE = '/api';
 
@@ -525,6 +597,29 @@
             const alert = document.getElementById('dns-alert');
             alert.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
             setTimeout(() => alert.innerHTML = '', 5000);
+        }
+
+        // 邮件发送专用提示函数
+        function showComposeAlert(message, type = 'success') {
+            const alert = document.getElementById('compose-alert');
+            alert.innerHTML = `<div class="alert alert-${type}">${message}</div>`;
+            
+            // 成功提示3秒后自动关闭，错误提示5秒后关闭
+            const timeout = type === 'success' ? 3000 : 5000;
+            setTimeout(() => alert.innerHTML = '', timeout);
+        }
+
+        // 显示发送中状态
+        function showComposeSending() {
+            const alert = document.getElementById('compose-alert');
+            alert.innerHTML = `
+                <div class="alert alert-sending">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                        <div class="loading-spinner"></div>
+                        <span>正在发送邮件，请稍候...</span>
+                    </div>
+                </div>
+            `;
         }
 
         // 创建邮箱域名
@@ -602,6 +697,7 @@
                         </td>
                         <td>${new Date(d.created_at).toLocaleString('zh-CN')}</td>
                         <td>
+                            <button class="btn btn-success" onclick="openComposeModal('${d.email}')">发送邮件</button>
                             <button class="btn btn-danger" onclick="deleteDomain(${d.id})">删除</button>
                         </td>
                     </tr>
@@ -732,13 +828,111 @@
             document.getElementById('mail-modal').classList.remove('active');
         }
 
-        // 点击模态框外部关闭
-        window.onclick = function(event) {
-            const modal = document.getElementById('mail-modal');
-            if (event.target === modal) {
-                closeMailModal();
+        // 打开写邮件模态框
+        function openComposeModal(fromEmail) {
+            const modal = document.getElementById('compose-modal');
+            document.getElementById('compose-from').value = fromEmail;
+            document.getElementById('compose-to').value = '';
+            document.getElementById('compose-subject').value = '';
+            document.getElementById('compose-body').value = '';
+            modal.classList.add('active');
+        }
+
+        // 关闭写邮件模态框
+        function closeComposeModal() {
+            document.getElementById('compose-modal').classList.remove('active');
+            // 清空提示信息
+            document.getElementById('compose-alert').innerHTML = '';
+        }
+
+        // 发送邮件
+        async function sendEmail() {
+            const from = document.getElementById('compose-from').value;
+            const to = document.getElementById('compose-to').value;
+            const subject = document.getElementById('compose-subject').value;
+            const body = document.getElementById('compose-body').value;
+
+            if (!to || !subject || !body) {
+                showComposeAlert('请填写完整的邮件信息', 'error');
+                return;
+            }
+
+            if (!validateEmail(to)) {
+                showComposeAlert('请输入有效的收件人邮箱地址', 'error');
+                return;
+            }
+
+            // 显示发送中状态
+            showComposeSending();
+
+            try {
+                const response = await fetch(`${API_BASE}/send-email`, {
+                    method: 'POST',
+                    headers: getAuthHeaders(),
+                    body: JSON.stringify({
+                        from: from,
+                        to: to,
+                        subject: subject,
+                        body: body
+                    })
+                });
+
+                if (response.status === 401) {
+                    handleUnauthorized();
+                    return;
+                }
+
+                const data = await response.json();
+                
+                if (!response.ok) {
+                    throw new Error(data.error || '发送失败');
+                }
+
+                // 发送成功
+                showComposeAlert('✅ 邮件发送成功！邮件已成功发送到 ' + to);
+                
+                // 清空表单
+                document.getElementById('compose-to').value = '';
+                document.getElementById('compose-subject').value = '';
+                document.getElementById('compose-body').value = '';
+                
+                // 2秒后关闭模态框
+                setTimeout(() => {
+                    closeComposeModal();
+                }, 2000);
+                
+            } catch (error) {
+                console.error('邮件发送失败:', error);
+                showComposeAlert('❌ 发送失败: ' + error.message, 'error');
             }
         }
+
+        // 验证邮箱格式
+        function validateEmail(email) {
+            const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return re.test(email);
+        }
+
+        // 点击模态框外部关闭
+        window.onclick = function(event) {
+            const mailModal = document.getElementById('mail-modal');
+            const composeModal = document.getElementById('compose-modal');
+            
+            if (event.target === mailModal) {
+                closeMailModal();
+            }
+            if (event.target === composeModal) {
+                closeComposeModal();
+            }
+        }
+
+        // 写邮件表单提交事件
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('compose-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                sendEmail();
+            });
+        });
 
         // 加载统计信息
         async function loadStats() {

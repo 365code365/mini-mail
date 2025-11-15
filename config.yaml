@@ -1,0 +1,29 @@
+# 邮箱服务配置
+domain: "niuma946.com"
+smtp_port: 25
+http_port: 9989
+database_path: "./mails.db"
+public_ip: "124.xx.xx.238"
+tencent_secret_id: "xxx"
+tencent_secret_key: "xxx"
+
+# 邮件发送配置（使用自己的SMTP服务器）
+email_smtp_host: "mail.xxx.com"
+email_smtp_port: 587                   # 使用587端口进行邮件提交
+email_sender: "admin@xxx.com"
+email_password: ""                      # 本地服务器无需密码
+email_sender_name: "邮箱服务"
+
+# 邮件转发配置
+forward_enabled: false                  # 禁用SMTP转发（端口被阻止）
+
+# HTTP邮件发送配置（替代方案）
+http_email_enabled: false               # 是否启用HTTP邮件发送
+http_email_provider: "sendgrid"         # 邮件服务提供商
+http_email_api_key: ""                  # API密钥
+http_email_from: ""                     # 发件人邮箱
+
+# 邮件队列配置（本地存储，等待网络恢复）
+queue_enabled: true                     # 启用邮件队列
+queue_retry_interval: 300               # 重试间隔（秒）
+queue_max_retries: 10                   # 最大重试次数

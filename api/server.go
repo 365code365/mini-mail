@@ -2,11 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
 	"mail-server/services"
 	"mail-server/storage"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gorilla/mux"
 )
@@ -63,6 +65,9 @@ func (s *Server) setupRoutes() {
 	s.router.HandleFunc("/api/domains", s.authMiddleware(s.getDomains)).Methods("GET", "OPTIONS")
 	s.router.HandleFunc("/api/domains", s.authMiddleware(s.createDomain)).Methods("POST", "OPTIONS")
 	s.router.HandleFunc("/api/domains/{id}", s.authMiddleware(s.deleteDomain)).Methods("DELETE", "OPTIONS")
+
+	// 邮件发送API - 需要认证
+	s.router.HandleFunc("/api/send-email", s.authMiddleware(s.sendEmail)).Methods("POST", "OPTIONS")
 
 	// 静态文件 - 不需要认证
 	s.router.PathPrefix("/").Handler(http.FileServer(http.Dir("./web")))
@@ -188,15 +193,10 @@ func respondJSON(w http.ResponseWriter, status int, data interface{}) {
 
 // getDomains 获取所有邮箱域名
 func (s *Server) getDomains(w http.ResponseWriter, r *http.Request) {
-	if s.dnsService == nil {
-		http.Error(w, "DNS service not available", http.StatusServiceUnavailable)
-		return
-	}
-
 	// 获取当前用户ID
 	userID := getUserIDFromRequest(r)
 
-	domains, err := s.dnsService.GetMailDomains(userID)
+	domains, err := s.storage.GetMailDomains(userID)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -212,11 +212,6 @@ func (s *Server) getDomains(w http.ResponseWriter, r *http.Request) {
 
 // createDomain 创建邮箱域名
 func (s *Server) createDomain(w http.ResponseWriter, r *http.Request) {
-	if s.dnsService == nil {
-		http.Error(w, "DNS service not available", http.StatusServiceUnavailable)
-		return
-	}
-
 	// 获取当前用户ID
 	userID := getUserIDFromRequest(r)
 	// 获取用户邮箱
@@ -253,6 +248,45 @@ func (s *Server) createDomain(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// 如果DNS服务不可用，创建一个简化的域名记录
+	if s.dnsService == nil {
+		log.Printf("DNS service not available, creating simplified domain record for: %s", req.Email)
+
+		// 生成虚拟域名
+		parts := strings.Split(req.Email, "@")
+		var subdomain string
+		if len(parts) == 2 {
+			subdomain = parts[0]
+		} else {
+			subdomain = fmt.Sprintf("user%d", userID)
+		}
+		fullDomain := fmt.Sprintf("%s.mail.example.com", subdomain)
+
+		// 直接保存到数据库
+		err := s.storage.CreateMailDomain(userID, subdomain, fullDomain, subdomain, req.Email)
+		if err != nil {
+			response := map[string]string{"error": err.Error()}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		domain := &storage.MailDomain{
+			Subdomain:  subdomain,
+			FullDomain: fullDomain,
+			RecordID:   subdomain,
+			Email:      req.Email,
+		}
+
+		// 增加用户域名计数
+		s.storage.IncrementDomainCount(userID)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(domain)
+		return
+	}
+
 	domain, err := s.dnsService.CreateMailDomain(userID, req.Email)
 	if err != nil {
 		response := map[string]string{"error": err.Error()}
@@ -271,11 +305,6 @@ func (s *Server) createDomain(w http.ResponseWriter, r *http.Request) {
 
 // deleteDomain 删除邮箱域名
 func (s *Server) deleteDomain(w http.ResponseWriter, r *http.Request) {
-	if s.dnsService == nil {
-		http.Error(w, "DNS service not available", http.StatusServiceUnavailable)
-		return
-	}
-
 	// 获取当前用户ID
 	userID := getUserIDFromRequest(r)
 
@@ -286,10 +315,21 @@ func (s *Server) deleteDomain(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = s.dnsService.DeleteMailDomain(userID, id)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+	// 如果DNS服务可用，尝试删除DNS记录
+	if s.dnsService != nil {
+		err = s.dnsService.DeleteMailDomain(userID, id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+	} else {
+		// DNS服务不可用时，只删除数据库记录
+		log.Printf("DNS service not available, only deleting database record for domain ID: %d", id)
+		err = s.storage.DeleteMailDomain(userID, id)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 	}
 
 	// 减少用户域名计数
@@ -297,4 +337,108 @@ func (s *Server) deleteDomain(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"message": "success"})
+}
+
+// sendEmail 发送邮件
+func (s *Server) sendEmail(w http.ResponseWriter, r *http.Request) {
+	if s.emailSender == nil {
+		response := map[string]string{"error": "邮件发送服务不可用"}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusServiceUnavailable)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// 获取当前用户ID
+	userID := getUserIDFromRequest(r)
+
+	var req struct {
+		From    string `json:"from"`
+		To      string `json:"to"`
+		Subject string `json:"subject"`
+		Body    string `json:"body"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		response := map[string]string{"error": "请求格式错误"}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// 验证必填字段
+	if req.From == "" || req.To == "" || req.Subject == "" || req.Body == "" {
+		response := map[string]string{"error": "所有字段都是必填的"}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// 验证发件人邮箱是否属于当前用户
+	if s.dnsService != nil {
+		domains, err := s.dnsService.GetMailDomains(userID)
+		if err != nil {
+			response := map[string]string{"error": "获取用户邮箱失败"}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusInternalServerError)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+
+		// 检查发件人邮箱是否在用户的邮箱列表中
+		isValidSender := false
+		for _, domain := range domains {
+			if domain.Email == req.From {
+				isValidSender = true
+				break
+			}
+		}
+
+		if !isValidSender {
+			response := map[string]string{"error": "发件人邮箱不属于当前用户"}
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusForbidden)
+			json.NewEncoder(w).Encode(response)
+			return
+		}
+	}
+
+	// 将纯文本内容转换为HTML格式
+	htmlBody := s.convertTextToHTML(req.Body)
+
+	// 发送邮件
+	err := s.emailSender.SendEmail(req.To, req.Subject, htmlBody)
+	if err != nil {
+		log.Printf("发送邮件失败: %v", err)
+		response := map[string]string{"error": fmt.Sprintf("邮件发送失败: %v", err)}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(response)
+		return
+	}
+
+	// 记录发送的邮件（可选，用于统计）
+	log.Printf("用户 %d 发送邮件: %s -> %s, 主题: %s", userID, req.From, req.To, req.Subject)
+
+	response := map[string]string{"message": "邮件发送成功"}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
+}
+
+// convertTextToHTML 将纯文本转换为HTML格式
+func (s *Server) convertTextToHTML(text string) string {
+	// 简单的文本到HTML转换，保留换行符
+	html := strings.ReplaceAll(text, "\n", "<br>")
+	return fmt.Sprintf(`<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>%s</title>
+</head>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+    %s
+</body>
+</html>`, "邮件", html)
 }

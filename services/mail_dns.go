@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"mail-server/storage"
+	"strings"
 
 	"github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common"
 	dnspod "github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/dnspod/v20210323"
@@ -17,6 +18,15 @@ type MailDNSService struct {
 
 // NewMailDNSService 创建邮箱DNS服务
 func NewMailDNSService(domain, publicIP, secretId, secretKey string, storage storage.Storage) (*MailDNSService, error) {
+	// 如果关键配置为空，创建一个简化的DNS服务（不提供DNS管理功能）
+	if domain == "" || publicIP == "" || secretId == "" || secretKey == "" {
+		log.Printf("Warning: DNS configuration incomplete, creating simplified DNS service")
+		return &MailDNSService{
+			dnsService: nil, // 不提供DNS管理功能
+			storage:    storage,
+		}, nil
+	}
+
 	dnsService, err := NewDNSPodServiceWithCredentials(domain, publicIP, secretId, secretKey)
 	if err != nil {
 		return nil, err
@@ -39,25 +49,43 @@ func (m *MailDNSService) CreateMailDomain(userID int64, email string) (*storage.
 		return existing, nil
 	}
 
-	// 生成子域名
-	subdomain, err := m.dnsService.GenerateSubdomain()
-	if err != nil {
-		return nil, fmt.Errorf("生成子域名失败: %v", err)
+	var subdomain, fullDomain string
+
+	if m.dnsService == nil {
+		// DNS服务不可用时，生成一个虚拟的子域名
+		log.Printf("DNS service not available, creating virtual domain for email: %s", email)
+		// 使用邮箱前缀作为子域名
+		parts := strings.Split(email, "@")
+		if len(parts) == 2 {
+			subdomain = parts[0]
+		} else {
+			subdomain = fmt.Sprintf("user%d", userID)
+		}
+		// 使用默认域名
+		fullDomain = fmt.Sprintf("%s.mail.example.com", subdomain)
+	} else {
+		// 生成子域名
+		subdomain, err = m.dnsService.GenerateSubdomain()
+		if err != nil {
+			return nil, fmt.Errorf("生成子域名失败: %v", err)
+		}
+
+		// 创建MX记录和A记录
+		err = m.createMailRecords(subdomain, email)
+		if err != nil {
+			return nil, fmt.Errorf("创建DNS记录失败: %v", err)
+		}
+
+		fullDomain = fmt.Sprintf("%s.%s", subdomain, m.dnsService.domain)
 	}
 
-	// 创建MX记录和A记录
-	err = m.createMailRecords(subdomain, email)
-	if err != nil {
-		return nil, fmt.Errorf("创建DNS记录失败: %v", err)
-	}
-
-	fullDomain := fmt.Sprintf("%s.%s", subdomain, m.dnsService.domain)
-
-	// 保存到数据库（使用子域名作为recordID的占位符）
+	// 保存到数据库
 	err = m.storage.CreateMailDomain(userID, subdomain, fullDomain, subdomain, email)
 	if err != nil {
 		// 如果保存失败，尝试清理DNS记录
-		m.deleteMailRecords(subdomain)
+		if m.dnsService != nil {
+			m.deleteMailRecords(subdomain)
+		}
 		return nil, fmt.Errorf("保存邮箱域名失败: %v", err)
 	}
 

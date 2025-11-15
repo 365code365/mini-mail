@@ -1,6 +1,7 @@
 package main
 
 import (
+	"io/ioutil"
 	"log"
 	"mail-server/api"
 	"mail-server/services"
@@ -9,22 +10,27 @@ import (
 	"os"
 	"os/signal"
 	"syscall"
+
+	"gopkg.in/yaml.v3"
 )
 
 // Config 配置
 type Config struct {
-	Domain           string
-	SMTPPort         int
-	HTTPPort         int
-	DatabasePath     string
-	PublicIP         string
-	TencentSecretID  string
-	TencentSecretKey string
+	Domain           string `yaml:"domain"`
+	SMTPPort         int    `yaml:"smtp_port"`
+	HTTPPort         int    `yaml:"http_port"`
+	DatabasePath     string `yaml:"database_path"`
+	PublicIP         string `yaml:"public_ip"`
+	TencentSecretID  string `yaml:"tencent_secret_id"`
+	TencentSecretKey string `yaml:"tencent_secret_key"`
 	// 邮件发送配置
-	EmailSMTPHost string
-	EmailSMTPPort int
-	EmailSender   string
-	EmailPassword string
+	EmailSMTPHost   string `yaml:"email_smtp_host"`
+	EmailSMTPPort   int    `yaml:"email_smtp_port"`
+	EmailSender     string `yaml:"email_sender"`
+	EmailPassword   string `yaml:"email_password"`
+	EmailSenderName string `yaml:"email_sender_name"`
+	// 邮件转发配置
+	ForwardEnabled bool `yaml:"forward_enabled"`
 }
 
 // MailHandler 邮件处理器
@@ -67,20 +73,42 @@ func (h *MailHandler) HandleMail(msg *smtp.MailMessage) error {
 }
 
 func main() {
-	// 配置
+	// 默认配置
 	config := Config{
-		Domain:           "",           // 主域名
-		SMTPPort:         25,           // SMTP端口
-		HTTPPort:         9989,         // HTTP API端口
-		DatabasePath:     "./mails.db", // 数据库文件路径
-		PublicIP:         "",           // 公网IP
-		TencentSecretID:  "",           // 腾讯云SecretID
-		TencentSecretKey: "",           // 腾讯云SecretKey
+		Domain:           "xxx.com",         // 主域名
+		SMTPPort:         25,                // SMTP端口
+		HTTPPort:         9989,              // HTTP API端口
+		DatabasePath:     "./mails.db",      // 数据库文件路径
+		PublicIP:         "124.xxx.xxx.238", // 公网IP
+		TencentSecretID:  "xxx",             // 腾讯云SecretID
+		TencentSecretKey: "xxx",             // 腾讯云SecretKey
 		// 邮件发送配置（使用自己的SMTP服务器）
-		EmailSMTPHost: "127.0.0.1", // 本地SMTP服务器
-		EmailSMTPPort: 25,          // SMTP端口
-		EmailSender:   "",          // 发件人邮箱
-		EmailPassword: "",          // 无需密码（本地服务器）
+		EmailSMTPHost:   "mail.xxx.com",  // 自己的SMTP服务器
+		EmailSMTPPort:   587,             // 使用587端口进行邮件提交
+		EmailSender:     "admin@xxx.com", // 发件人邮箱
+		EmailPassword:   "",              // 本地服务器无需密码
+		EmailSenderName: "邮箱服务",          // 发件人名称
+		// 邮件转发配置
+		ForwardEnabled: false, // 暂时关闭邮件转发避免超时
+	}
+
+	// 尝试读取配置文件
+	if _, err := os.Stat("config.yaml"); err == nil {
+		log.Printf("Loading configuration from config.yaml...")
+		data, err := ioutil.ReadFile("config.yaml")
+		if err != nil {
+			log.Printf("Failed to read config.yaml: %v, using default config", err)
+		} else {
+			err = yaml.Unmarshal(data, &config)
+			if err != nil {
+				log.Printf("Failed to parse config.yaml: %v, using default config", err)
+			} else {
+				log.Printf("Configuration loaded from config.yaml")
+			}
+		}
+	} else {
+		log.Printf("config.yaml not found, using default configuration")
+		log.Printf("To customize settings, copy config.example.yaml to config.yaml")
 	}
 
 	// 初始化存储
@@ -99,8 +127,9 @@ func main() {
 		store,
 	)
 	if err != nil {
-		log.Printf("Warning: Failed to initialize DNS service: %v", err)
+		log.Printf("Error: Failed to initialize DNS service: %v", err)
 		log.Printf("DNS management features will be disabled")
+		mailDNSService = nil
 	}
 
 	// 初始化邮件发送服务
@@ -108,7 +137,7 @@ func main() {
 		config.EmailSMTPHost,
 		config.EmailSMTPPort,
 		config.EmailSender,
-		"邮箱服务", // 发件人名称
+		config.EmailSenderName, // 发件人名称
 		config.EmailPassword,
 	)
 	log.Printf("Email sender initialized: %s", config.EmailSender)
@@ -116,12 +145,20 @@ func main() {
 	// 创建邮件处理器
 	handler := &MailHandler{storage: store}
 
-	// 启动SMTP服务器
+	// 启动SMTP服务器（25端口接收邮件）
 	smtpDomain := "mail." + config.Domain
-	smtpServer := smtp.NewServer(smtpDomain, config.SMTPPort, handler)
+	smtpServer := smtp.NewServer(smtpDomain, config.SMTPPort, handler, config.ForwardEnabled)
 	go func() {
 		if err := smtpServer.Start(); err != nil {
 			log.Fatalf("SMTP server error: %v", err)
+		}
+	}()
+
+	// 启动SMTP提交服务器（587端口用于邮件提交）
+	smtpSubmitServer := smtp.NewServer(smtpDomain, 587, handler, config.ForwardEnabled)
+	go func() {
+		if err := smtpSubmitServer.Start(); err != nil {
+			log.Printf("SMTP submit server error: %v", err)
 		}
 	}()
 
@@ -134,7 +171,8 @@ func main() {
 	}()
 
 	log.Printf("Mail server started successfully!")
-	log.Printf("SMTP Server: %s:%d", smtpDomain, config.SMTPPort)
+	log.Printf("SMTP Server (接收邮件): %s:%d", smtpDomain, config.SMTPPort)
+	log.Printf("SMTP Submit Server (邮件提交): %s:587", smtpDomain)
 	log.Printf("HTTP API Server: http://localhost:%d", config.HTTPPort)
 	log.Printf("Web Management: http://localhost:%d/", config.HTTPPort)
 	log.Printf("API Endpoints:")

@@ -3,3 +3,13 @@ domain: "mail.example.com"
 smtp_port: 25
 http_port: 8080
 database_path: "./mails.db"
+public_ip: ""
+tencent_secret_id: ""
+tencent_secret_key: ""
+
+# 邮件发送配置（用于发送验证码等）
+email_smtp_host: "smtp.example.com"
+email_smtp_port: 587  # 使用587端口避免QQ邮箱拒绝
+email_sender: "noreply@example.com"
+email_password: "your_smtp_password"
+email_sender_name: "邮箱服务"
